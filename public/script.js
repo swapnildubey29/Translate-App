@@ -1,47 +1,95 @@
-const voiceSelect = document.querySelector("#voiceSelect");
-const playButton = document.querySelector("#playButton");
-const textInput = document.querySelector("textarea");
-const languageSelect = document.querySelector("#languageSelect");
+const voiceSelect = document.querySelector("#voiceSelect")
+const playButton = document.querySelector("#playButton")
+const textInput = document.querySelector("textarea")
+const languageSelect = document.querySelector("#languageSelect")
 
-//Array of supported languages with their ISO codes
+// Array of supported languages with their ISO codes
 const languages = [
   { code: "en", name: "English" },
   { code: "es", name: "Spanish" },
   { code: "fr", name: "French" },
   { code: "de", name: "German" },
   { code: "it", name: "Italian" },
-  { code: "ja", name: "Japanese" },
-  { code: "zn-CN", name: "Chinese (Simplified)" },
-];
+]
 
-//Populate language select box
+// Populate language select box
 languages.forEach(({ code, name }) => {
-  const option = document.createElement("option");
-  option.value = code;
-  option.textContent = name;
-  languageSelect.appendChild(option);
-});
+  const option = document.createElement("option")
+  option.value = code
+  option.textContent = name
+  languageSelect.appendChild(option)
+})
 
-//Load available voices
-let voices = [];
+// Load available voices
+let voices = []
 function loadVoices() {
-  voices = speechSynthesis.getVoices();
+  voices = speechSynthesis.getVoices()
   voiceSelect.innerHTML = voices
     .map(
       (voice, index) =>
-        `<option value="${index}">${voice.name} (${voice.lang}) </option>`
+        `<option value="${index}">${voice.name} (${voice.lang})</option>`
     )
-    .join("");
+    .join("")
 }
 
-//Trigger loading voices when they become available
-speechSynthesis.onvoiceschanged = loadVoices;
-loadVoices();
+// Trigger loading voices when they become available
+speechSynthesis.onvoiceschanged = loadVoices
+loadVoices()
 
-//Play TTS
-playButton.addEventListener("click", () => {
-  const utterance = new SpeechSynthesisUtterance(textInput.value);
-  const selectedVoice = voices[voiceSelect.value];
-  if (selectedVoice) utterance.voice = selectedVoice;
-  speechSynthesis.speak(utterance);
-});
+// Translate text with serverless function
+async function translateText(text, targetLang) {
+  try {
+    const response = await fetch("/api/translate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        text,
+        target: targetLang,
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Error ${response.status}: ${await response.text()}`)
+    }
+
+    const data = await response.json()
+    return data.data.translations[0].translatedText
+  } catch (error) {
+    console.error("Translation Error: ", error)
+    alert("Failed to translate text")
+    return text
+  }
+}
+
+// TTS
+function playText(text, voiceIndex) {
+  const utterance = new SpeechSynthesisUtterance(text)
+  if (voices[voiceIndex]) {
+    utterance.voice = voices[voiceIndex]
+  }
+  speechSynthesis.speak(utterance)
+}
+
+// Play TTS
+playButton.addEventListener("click", async () => {
+  const text = textInput.value.trim()
+  const targetLang = languageSelect.value
+  const selectedVoiceIndex = voiceSelect.value
+
+  if (!text) {
+    alert("Please enter some text!")
+    return
+  }
+
+  try {
+    // Translate text
+    const translatedText = await translateText(text, targetLang)
+    // Play text
+    playText(translatedText, selectedVoiceIndex)
+  } catch (error) {
+    console.error("Error during processing: ", error)
+    alert("An error occurred")
+  }
+})
